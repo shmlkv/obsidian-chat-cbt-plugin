@@ -1,8 +1,7 @@
 import { requestUrl } from 'obsidian';
 import summaryPrompt from '../prompts/summary';
 import {
-	OPENAI_DEFAULT_MODEL,
-	DEEPSEEK_DEFAULT_MODEL,
+	OPENROUTER_DEFAULT_MODEL,
 	AI_PROVIDERS,
 } from '../constants';
 import { Notice } from 'obsidian';
@@ -17,12 +16,10 @@ export interface Message {
 
 export type Mode = AI_PROVIDERS;
 export interface ChatInput {
-	openAiApiKey: string | undefined;
-	deepseekApiKey: string | undefined;
+	openRouterApiKey: string | undefined;
 	messages: Message[];
 	isSummary: boolean | undefined;
 	mode: Mode;
-	ollamaUrl: string | undefined;
 	model: string | undefined;
 	language: string;
 	prompt: string;
@@ -32,12 +29,10 @@ export class ChatCbt {
 	constructor() {}
 
 	async chat({
-		openAiApiKey,
-		deepseekApiKey,
+		openRouterApiKey,
 		messages,
 		isSummary = false,
-		mode = AI_PROVIDERS.OPENAI,
-		ollamaUrl,
+		mode = AI_PROVIDERS.OPENROUTER,
 		model,
 		language,
 		prompt,
@@ -62,26 +57,16 @@ export class ChatCbt {
 
 		const msgs = [SYSTEM_MSG, ...resolvedMsgs];
 
-		/** validations should be guaranteed from parent layer, based on mode. Re-validating here to appease typescript gods */
-		if (mode === AI_PROVIDERS.OPENAI && !!openAiApiKey) {
-			const url = 'https://api.openai.com/v1/chat/completions';
+		if (mode === AI_PROVIDERS.OPENROUTER && !!openRouterApiKey) {
+			const url = 'https://openrouter.ai/api/v1/chat/completions';
+			console.log('[ChatCBT] Making request to OpenRouter with model:', model || OPENROUTER_DEFAULT_MODEL);
 			response = await this._chat(
 				url,
 				msgs,
-				openAiApiKey,
-				model || OPENAI_DEFAULT_MODEL,
+				openRouterApiKey,
+				model || OPENROUTER_DEFAULT_MODEL,
 			);
-		} else if (mode === AI_PROVIDERS.OLLAMA && !!ollamaUrl) {
-			const url = ollamaUrl.replace(/\/$/, '') + '/v1/chat/completions';
-			response = await this._chat(url, msgs, 'ollama', model || '');
-		} else if (mode === AI_PROVIDERS.DEEPSEEK && !!deepseekApiKey) {
-			const url = 'https://api.deepseek.com/v1/chat/completions';
-			response = await this._chat(
-				url,
-				msgs,
-				deepseekApiKey,
-				model || DEEPSEEK_DEFAULT_MODEL,
-			);
+			console.log('[ChatCBT] Received response from OpenRouter');
 		}
 
 		return response;
@@ -99,45 +84,56 @@ export class ChatCbt {
 			temperature: 0.7,
 		};
 
-		const headers = {
-			Authorization: `Bearer ${apiKey}`,
+		const headers: Record<string, string> = {
+			'Authorization': `Bearer ${apiKey}`,
 			'Content-Type': 'application/json',
 		};
+
+		// Add OpenRouter-specific headers
+		if (url.includes('openrouter.ai')) {
+			headers['HTTP-Referer'] = 'https://github.com/clairefro/obsidian-chat-cbt-plugin';
+			headers['X-Title'] = 'ChatCBT Obsidian Plugin';
+		}
 
 		const options = {
 			url,
 			method: 'POST',
 			body: JSON.stringify(data),
-			headers: headers as unknown as Record<string, string>,
+			headers,
 		};
 
-		const response: {
-			json: { choices: { message: { content: string } }[] };
-		} = await requestUrl(options);
-
-		return response.json.choices[0].message.content;
-	}
-
-	static async getAvailableOllamaModels(ollamaUrl: string): Promise<string[]> {
 		try {
-			const url = `${ollamaUrl.replace(/\/$/, '')}/api/tags`;
-
-			const options = {
-				url,
-				method: 'GET',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-			};
-
 			const response: {
-				json: { models: { name: string }[] };
+				json: {
+					choices: { message: { content: string } }[];
+					error?: { message: string; code: string };
+				};
 			} = await requestUrl(options);
 
-			return response.json.models.map((model) => model.name);
-		} catch (error) {
-			console.error('Failed to fetch Ollama models:', error);
-			return [];
+			// Check for API errors in response
+			if (response.json.error) {
+				throw new Error(`API Error: ${response.json.error.message || 'Unknown error'}`);
+			}
+
+			if (!response.json.choices || response.json.choices.length === 0) {
+				throw new Error('No response from API');
+			}
+
+			return response.json.choices[0].message.content;
+		} catch (error: any) {
+			// Enhance error message for common issues
+			if (error.status === 401) {
+				throw new Error('Invalid API key. Please check your OpenRouter API key in settings.');
+			} else if (error.status === 403) {
+				throw new Error('Access forbidden. Please verify your OpenRouter API key has proper permissions.');
+			} else if (error.status === 404) {
+				throw new Error(`Model '${model}' not found. Please check the model name in settings.`);
+			} else if (error.status === 429) {
+				throw new Error('Rate limit exceeded. Please try again later.');
+			} else if (error.status >= 500) {
+				throw new Error('OpenRouter service error. Please try again later.');
+			}
+			throw error;
 		}
 	}
 }

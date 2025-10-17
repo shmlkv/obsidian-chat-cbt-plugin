@@ -14,44 +14,45 @@ import {
 import { ChatCbt, Mode } from './util/chatcbt';
 import { buildAssistantMsg, convertTextToMsg } from './util/messages';
 import { platformBasedSecrets } from './util/platformBasedSecrets';
-import { OPENAI_DEFAULT_MODEL, DEEPSEEK_DEFAULT_MODEL } from './constants';
+import { OPENROUTER_DEFAULT_MODEL } from './constants';
 import { languages } from './util/languages';
 import defaultSystemPrompt from './prompts/system';
 import { AI_PROVIDERS } from './constants';
 
 /** Interfaces */
+interface CustomPrompt {
+	id: string;
+	name: string;
+	prompt: string;
+}
+
 interface ChatCbtPluginSettings {
-	openAiApiKey: string;
-	deepseekApiKey: string;
+	openRouterApiKey: string;
 	mode: AI_PROVIDERS;
-	model: string; // KEEPING FOR BACKCOMPAT
-	ollamaUrl: string;
 	language: string;
 	prompt: string;
-	openaiModel: string;
-	ollamaModel: string;
-	deepseekModel: string;
+	openRouterModel: string;
+	assistantName: string;
+	customPrompts: CustomPrompt[];
 }
 
 interface ChatCbtResponseInput {
 	isSummary: boolean;
 	mode: Mode;
+	customPrompt?: string;
 }
 
 /** Constants */
 const DEFAULT_LANG = 'English';
 
 const DEFAULT_SETTINGS: ChatCbtPluginSettings = {
-	openAiApiKey: '',
-	deepseekApiKey: '',
-	mode: AI_PROVIDERS.OPENAI,
-	model: '_DEPRECATED', // KEEPING FOR BACKCOMPAT
-	ollamaUrl: 'http://0.0.0.0:11434',
+	openRouterApiKey: '',
+	mode: AI_PROVIDERS.OPENROUTER,
 	language: DEFAULT_LANG,
 	prompt: defaultSystemPrompt,
-	openaiModel: '',
-	ollamaModel: '',
-	deepseekModel: '',
+	openRouterModel: '',
+	assistantName: 'ChatCBT',
+	customPrompts: [],
 };
 
 /** Initialize chat client */
@@ -61,9 +62,10 @@ export default class ChatCbtPlugin extends Plugin {
 	settings: ChatCbtPluginSettings;
 
 	async onload() {
-		console.log('loading plugin');
+		console.log('[ChatCBT] Loading plugin...');
 
 		await this.loadSettings();
+		console.log('[ChatCBT] Settings loaded. Mode:', this.settings.mode, 'Model:', this.settings.openRouterModel || 'default');
 
 		// This creates an icon in the left ribbon.
 		this.addRibbonIcon('heart-handshake', 'ChatCBT', (evt: MouseEvent) => {
@@ -129,14 +131,54 @@ export default class ChatCbtPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const loadedData = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+
+		// Migrate old settings to OpenRouter
+		let needsSave = false;
+
+		// Force mode to OpenRouter
+		if (this.settings.mode !== AI_PROVIDERS.OPENROUTER) {
+			this.settings.mode = AI_PROVIDERS.OPENROUTER;
+			needsSave = true;
+		}
+
+		// Migrate old API keys to OpenRouter if present
+		if (loadedData) {
+			const oldData = loadedData as any;
+			if ((oldData.openAiApiKey || oldData.deepseekApiKey) && !this.settings.openRouterApiKey) {
+				// Use OpenAI key as default if present
+				if (oldData.openAiApiKey) {
+					this.settings.openRouterApiKey = oldData.openAiApiKey;
+					needsSave = true;
+				} else if (oldData.deepseekApiKey) {
+					this.settings.openRouterApiKey = oldData.deepseekApiKey;
+					needsSave = true;
+				}
+			}
+
+			// Migrate model settings
+			if ((oldData.openaiModel || oldData.deepseekModel || oldData.ollamaModel) && !this.settings.openRouterModel) {
+				if (oldData.openaiModel) {
+					// Convert OpenAI model to OpenRouter format
+					this.settings.openRouterModel = oldData.openaiModel.includes('/')
+						? oldData.openaiModel
+						: `openai/${oldData.openaiModel}`;
+					needsSave = true;
+				}
+			}
+		}
+
+		if (needsSave) {
+			await this.saveSettings();
+		}
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
 
-	async getChatCbtRepsonse({ isSummary = false }: ChatCbtResponseInput) {
+	async getChatCbtRepsonse({ isSummary = false, customPrompt }: ChatCbtResponseInput) {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
 			return;
@@ -144,34 +186,16 @@ export default class ChatCbtPlugin extends Plugin {
 
 		if (!Object.values(AI_PROVIDERS).includes(this.settings.mode)) {
 			new Notice(
-				`Inavlid mode '${this.settings.mode}' detected. Update in ChatCBT plugin settings and select a valid mode`,
+				`Invalid mode '${this.settings.mode}' detected. Update in ChatCBT plugin settings and select a valid mode`,
 			);
 			return;
 		}
 
 		if (
-			this.settings.mode === AI_PROVIDERS.OPENAI &&
-			!this.settings.openAiApiKey
+			this.settings.mode === AI_PROVIDERS.OPENROUTER &&
+			!this.settings.openRouterApiKey
 		) {
-			new Notice('Missing OpenAI API Key - update in ChatCBT plugin settings');
-			return;
-		}
-
-		if (
-			this.settings.mode === AI_PROVIDERS.DEEPSEEK &&
-			!this.settings.deepseekApiKey
-		) {
-			new Notice(
-				'Missing Deepseek API Key - update in ChatCBT plugin settings',
-			);
-			return;
-		}
-
-		if (
-			this.settings.mode === AI_PROVIDERS.OLLAMA &&
-			!this.settings.ollamaUrl
-		) {
-			new Notice('Missing Ollama URL - update in ChatCBT plugin settings');
+			new Notice('Missing OpenRouter API Key - update in ChatCBT plugin settings');
 			return;
 		}
 
@@ -184,7 +208,12 @@ export default class ChatCbtPlugin extends Plugin {
 		const messages = existingText
 			.split(/---+/)
 			.map((i) => i.trim())
-			.map((i) => convertTextToMsg(i));
+			.map((i) => convertTextToMsg(i, this.settings.assistantName));
+
+		// Add custom prompt as a user message if provided
+		if (customPrompt) {
+			messages.push({ role: 'user', content: customPrompt });
+		}
 
 		const selectedModel = this.getCurrentModel();
 
@@ -197,36 +226,41 @@ export default class ChatCbtPlugin extends Plugin {
 		let response = '';
 
 		try {
-			const openAiApiKey = this.settings.openAiApiKey
-				? platformBasedSecrets.decrypt(this.settings.openAiApiKey)
-				: '';
-
-			const deepseekApiKey = this.settings.deepseekApiKey
-				? platformBasedSecrets.decrypt(this.settings.deepseekApiKey)
+			const openRouterApiKey = this.settings.openRouterApiKey
+				? platformBasedSecrets.decrypt(this.settings.openRouterApiKey)
 				: '';
 
 			const res = await chatCbt.chat({
-				openAiApiKey,
-				deepseekApiKey,
+				openRouterApiKey,
 				messages,
 				isSummary,
 				mode: this.settings.mode as Mode,
-				ollamaUrl: this.settings.ollamaUrl,
 				model: selectedModel,
 				language: this.settings.language,
 				prompt: this.settings.prompt,
 			});
 			response = res;
-		} catch (e) {
-			let msg = e.msg;
-			if (e.status === 404) {
-				msg = `Model named '${selectedModel}' not found for ${this.settings.mode}. Update mode or model name in settings.`;
-			} else if (e.status > 399 && e.status < 500) {
-				msg = `Unable to connect to provider ${this.settings.mode}.\n\nEnsure you have:\n\n- a valid API key registered in the settings\n\n - there is credit charged in your account (if applicable)`;
+		} catch (e: any) {
+			console.error('ChatCBT error:', e);
+
+			let errorMsg = 'An error occurred while processing your request.';
+
+			// Use the enhanced error message if available
+			if (e.message) {
+				errorMsg = e.message;
+			} else if (e.status) {
+				if (e.status === 401) {
+					errorMsg = 'Invalid API key. Please check your OpenRouter API key in settings.';
+				} else if (e.status === 404) {
+					errorMsg = `Model '${selectedModel}' not found. Check the model name at https://openrouter.ai/models`;
+				} else if (e.status >= 400 && e.status < 500) {
+					errorMsg = `Unable to connect to OpenRouter.\n\nEnsure you have:\n- A valid OpenRouter API key\n- Credits in your OpenRouter account\n- The correct model name`;
+				} else if (e.status >= 500) {
+					errorMsg = 'OpenRouter service error. Please try again later.';
+				}
 			}
 
-			new Notice(`ChatCBT failed with status ${e.status}: ${msg}`);
-			console.error(e);
+			new Notice(`ChatCBT Error: ${errorMsg}`, 10000);
 		} finally {
 			loadingModal.close();
 		}
@@ -235,7 +269,7 @@ export default class ChatCbtPlugin extends Plugin {
 			const MSG_PADDING = '\n\n';
 			const appendMsg = isSummary
 				? MSG_PADDING + response
-				: buildAssistantMsg(response);
+				: buildAssistantMsg(response, this.settings.assistantName);
 			await this.app.vault.append(activeFile, appendMsg);
 		}
 	}
@@ -248,16 +282,7 @@ export default class ChatCbtPlugin extends Plugin {
 	}
 
 	private getCurrentModel(): string {
-		switch (this.settings.mode) {
-			case AI_PROVIDERS.OPENAI:
-				return this.settings.openaiModel || OPENAI_DEFAULT_MODEL;
-			case AI_PROVIDERS.OLLAMA:
-				return this.settings.ollamaModel || '';
-			case AI_PROVIDERS.DEEPSEEK:
-				return this.settings.deepseekModel || DEEPSEEK_DEFAULT_MODEL;
-			default:
-				return '';
-		}
+		return this.settings.openRouterModel || OPENROUTER_DEFAULT_MODEL;
 	}
 }
 
@@ -281,62 +306,51 @@ class MySettingTab extends PluginSettingTab {
 		containerEl.createEl('br');
 		containerEl.createEl('br');
 
-		// PROVIDER DROPDOWN
+		// OPENROUTER MODEL
 		new Setting(containerEl)
-			.setName('AI Provider')
-			.setDesc('Choose which AI provider to use')
-			.addDropdown((dropdown) => {
-				dropdown
-					.addOption(AI_PROVIDERS.OPENAI, 'OpenAI (Cloud)')
-					.addOption(AI_PROVIDERS.DEEPSEEK, 'Deepseek (Cloud)')
-					.addOption(AI_PROVIDERS.OLLAMA, 'Ollama (Local)')
-					.setValue(this.plugin.settings.mode)
-					.onChange(async (value: AI_PROVIDERS) => {
-						this.plugin.settings.mode = value;
-						// this.updateModelPlaceholder(containerEl);
-						await this.plugin.saveSettings();
-
-						// show/hide relevant settings
-						this.updateProviderSettings(containerEl, value);
-					});
-			});
-
-		// OPENAI
-		new Setting(containerEl)
-			.setName('OpenAI Model')
-			.setClass('chat-cbt-provider-setting')
-			.setClass('chat-cbt-openai-setting')
-			.setDesc('Custom OpenAI model (leave empty for default)')
+			.setName('OpenRouter Model')
+			.setDesc('Enter model ID (e.g., openai/gpt-4o-mini, anthropic/claude-3.5-sonnet)')
 			.addText((text) =>
 				text
-					.setPlaceholder(OPENAI_DEFAULT_MODEL)
-					.setValue(this.plugin.settings.openaiModel)
+					.setPlaceholder(OPENROUTER_DEFAULT_MODEL)
+					.setValue(this.plugin.settings.openRouterModel)
 					.onChange(async (value) => {
-						this.plugin.settings.openaiModel = value.trim();
-
+						this.plugin.settings.openRouterModel = value.trim();
 						await this.plugin.saveSettings();
 					}),
 			);
 
-		// OpenAI API Key
+		// ASSISTANT NAME
 		new Setting(containerEl)
-			.setName('OpenAI API Key')
-			.setClass('chat-cbt-provider-setting')
-			.setClass('chat-cbt-openai-setting')
-			.setDesc('Make sure you have added credits to your account!')
+			.setName('Assistant Name')
+			.setDesc('Name that appears in responses (e.g., ChatCBT, Claude, OpenRouter)')
+			.addText((text) =>
+				text
+					.setPlaceholder('ChatCBT')
+					.setValue(this.plugin.settings.assistantName)
+					.onChange(async (value) => {
+						this.plugin.settings.assistantName = value.trim() || 'ChatCBT';
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		// OPENROUTER API KEY
+		new Setting(containerEl)
+			.setName('OpenRouter API Key')
+			.setDesc('Get your API key from OpenRouter')
 			.addText((text) =>
 				text
 					.setPlaceholder('Enter your API Key')
 					.setValue(
-						this.plugin.settings.openAiApiKey
-							? platformBasedSecrets.decrypt(this.plugin.settings.openAiApiKey)
+						this.plugin.settings.openRouterApiKey
+							? platformBasedSecrets.decrypt(this.plugin.settings.openRouterApiKey)
 							: '',
 					)
 					.onChange(async (value) => {
 						if (!value.trim()) {
-							this.plugin.settings.openAiApiKey = '';
+							this.plugin.settings.openRouterApiKey = '';
 						} else {
-							this.plugin.settings.openAiApiKey = platformBasedSecrets.encrypt(
+							this.plugin.settings.openRouterApiKey = platformBasedSecrets.encrypt(
 								value.trim(),
 							);
 						}
@@ -344,163 +358,26 @@ class MySettingTab extends PluginSettingTab {
 					}),
 			);
 
-		const openAiLinkboxEl = document.createElement('div');
-		openAiLinkboxEl.classList.add(
-			'chat-cbt-provider-setting',
-			'chat-cbt-openai-setting',
-		);
+		const openRouterLinkboxEl = document.createElement('div');
 
-		const link = openAiLinkboxEl.createEl('a');
-		link.textContent = 'Get OpenAI API Key';
-		link.href = 'https://platform.openai.com/api-keys';
+		const link = openRouterLinkboxEl.createEl('a');
+		link.textContent = 'Get OpenRouter API Key';
+		link.href = 'https://openrouter.ai/keys';
 		link.target = '_blank';
 		link.style.textDecoration = 'underline';
 
-		openAiLinkboxEl.createEl('br');
-		openAiLinkboxEl.createEl('br');
+		openRouterLinkboxEl.createEl('br');
 
-		containerEl.appendChild(openAiLinkboxEl);
+		const modelsLink = openRouterLinkboxEl.createEl('a');
+		modelsLink.textContent = 'Browse available models';
+		modelsLink.href = 'https://openrouter.ai/models';
+		modelsLink.target = '_blank';
+		modelsLink.style.textDecoration = 'underline';
 
-		// Deepseek API key
+		openRouterLinkboxEl.createEl('br');
+		openRouterLinkboxEl.createEl('br');
 
-		new Setting(containerEl)
-			.setName('Deepseek Model')
-			.setClass('chat-cbt-provider-setting')
-			.setClass('chat-cbt-deepseek-setting')
-			.setDesc('Custom Deepseek model (leave empty for default)')
-			.addText((text) =>
-				text
-					.setPlaceholder(DEEPSEEK_DEFAULT_MODEL)
-					.setValue(this.plugin.settings.deepseekModel)
-					.onChange(async (value) => {
-						this.plugin.settings.deepseekModel = value.trim();
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Deepseek API Key')
-			.setClass('chat-cbt-provider-setting')
-			.setClass('chat-cbt-deepseek-setting')
-			.setDesc('Enter your Deepseek API key')
-			.addText((text) =>
-				text
-					.setPlaceholder('Enter your API Key')
-					.setValue(
-						this.plugin.settings.deepseekApiKey
-							? platformBasedSecrets.decrypt(
-									this.plugin.settings.deepseekApiKey,
-							  )
-							: '',
-					)
-					.onChange(async (value) => {
-						if (!value.trim()) {
-							this.plugin.settings.deepseekApiKey = '';
-						} else {
-							this.plugin.settings.deepseekApiKey =
-								platformBasedSecrets.encrypt(value.trim());
-						}
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		const deepseekLinkboxEl = document.createElement('div');
-		deepseekLinkboxEl.classList.add(
-			'chat-cbt-provider-setting',
-			'chat-cbt-deepseek-setting',
-		);
-
-		const link2 = deepseekLinkboxEl.createEl('a');
-		link2.textContent = 'Get Deepseek API Key';
-		link2.href = 'https://platform.deepseek.com/api_keys';
-		link2.target = '_blank';
-		link2.style.textDecoration = 'underline';
-
-		deepseekLinkboxEl.createEl('br');
-		deepseekLinkboxEl.createEl('br');
-
-		containerEl.appendChild(deepseekLinkboxEl);
-
-		// OLLAMA
-
-		new Setting(containerEl)
-			.setName('Ollama Model')
-			.setClass('chat-cbt-provider-setting')
-			.setClass('chat-cbt-ollama-setting')
-			.setDesc(
-				'Select an available Ollama model. Ensure Ollama is running (run: ollama serve)',
-			)
-			.addDropdown(async (dropdown) => {
-				dropdown.addOption('loading', 'Loading available models...');
-
-				try {
-					const models = await ChatCbt.getAvailableOllamaModels(
-						this.plugin.settings.ollamaUrl,
-					);
-
-					dropdown.selectEl.empty();
-					if (!models.length) {
-						dropdown.addOption('', 'No models found');
-						new Notice(
-							'No Ollama models found. Install models via terminal: ollama pull <model>',
-						);
-						return;
-					}
-
-					dropdown.addOption('', '-- Select a model --');
-
-					models.forEach((model) => {
-						dropdown.addOption(model, model);
-					});
-
-					dropdown.setValue(this.plugin.settings.ollamaModel || '');
-				} catch (error) {
-					console.error('Failed to fetch Ollama models:', error);
-					dropdown.selectEl.empty();
-					dropdown.addOption('', 'Failed to load models');
-					new Notice(
-						'Failed to load Ollama models. Ensure Ollama serer is running',
-					);
-				}
-
-				// handle model selection
-				dropdown.onChange(async (value) => {
-					this.plugin.settings.ollamaModel = value;
-					await this.plugin.saveSettings();
-				});
-			});
-
-		const ollamaLinkboxEl = document.createElement('div');
-		ollamaLinkboxEl.classList.add(
-			'chat-cbt-provider-setting',
-			'chat-cbt-ollama-setting',
-		);
-
-		const ollamaLink = ollamaLinkboxEl.createEl('span');
-		ollamaLink.innerHTML =
-			'Install <a href="https://ollama.com/" target="_blank">Ollama</a> for free and local AI on your device. Suggested model: <a href="https://ollama.com/library/llama3.2" target="_blank">Llama 3.2 3B</a>';
-
-		ollamaLinkboxEl.createEl('br');
-		ollamaLinkboxEl.createEl('br');
-
-		containerEl.appendChild(ollamaLinkboxEl);
-
-		new Setting(containerEl)
-			.setName('Ollama server URL')
-			.setClass('chat-cbt-provider-setting')
-			.setClass('chat-cbt-ollama-setting')
-			.setDesc(
-				'Edit this if you changed the default port for using Ollama. Requires Ollama v0.1.24 or higher.',
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder('ex: http://0.0.0.0:11434')
-					.setValue(this.plugin.settings.ollamaUrl)
-					.onChange(async (value) => {
-						this.plugin.settings.ollamaUrl = value.trim();
-						await this.plugin.saveSettings();
-					}),
-			);
+		containerEl.appendChild(openRouterLinkboxEl);
 
 		// LANGUAGE
 		new Setting(containerEl)
@@ -573,35 +450,8 @@ class MySettingTab extends PluginSettingTab {
 		// hide the reset button setting's name/desc elements
 		resetButton.nameEl.remove();
 		resetButton.controlEl.addClass('chat-cbt-reset-button-control');
-		// run this on insitial settings load
+		// run this on initial settings load
 		updateResetButtonVisibility(this.plugin.settings.prompt);
-
-		// initialize
-		this.updateProviderSettings(containerEl, this.plugin.settings.mode);
-	}
-
-	private updateProviderSettings(containerEl: HTMLElement, mode: AI_PROVIDERS) {
-		const openaiSettings = Array.from(
-			containerEl.querySelectorAll('.chat-cbt-openai-setting'),
-		) as HTMLElement[];
-		const ollamaSettings = Array.from(
-			containerEl.querySelectorAll('.chat-cbt-ollama-setting'),
-		) as HTMLElement[];
-		const deepseekSettings = Array.from(
-			containerEl.querySelectorAll('.chat-cbt-deepseek-setting'),
-		) as HTMLElement[];
-
-		if (openaiSettings && ollamaSettings && deepseekSettings) {
-			openaiSettings.forEach((s) => {
-				s.style.display = mode === AI_PROVIDERS.OPENAI ? 'flex' : 'none';
-			});
-			ollamaSettings.forEach((s) => {
-				s.style.display = mode === AI_PROVIDERS.OLLAMA ? 'flex' : 'none';
-			});
-			deepseekSettings.forEach((s) => {
-				s.style.display = mode === AI_PROVIDERS.DEEPSEEK ? 'flex' : 'none';
-			});
-		}
 	}
 }
 

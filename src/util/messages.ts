@@ -1,9 +1,10 @@
-import { CHAT_AGENT_MARKER, CHAT_DELIMETER } from '../constants';
+import { CHAT_DELIMETER } from '../constants';
 import { escapeDangerousCharacters } from './parsers';
 
-function convertTextToMsg(text: string) {
+function convertTextToMsg(text: string, assistantName: string = 'ChatCBT') {
+	const agentMarker = `**${assistantName}:**`;
 	const agentMarkerRegex = new RegExp(
-		`^${escapeDangerousCharacters(CHAT_AGENT_MARKER)}`,
+		`^${escapeDangerousCharacters(agentMarker)}`,
 	);
 	if (text.match(agentMarkerRegex)) {
 		/** is assistant */
@@ -17,8 +18,9 @@ function convertTextToMsg(text: string) {
 	}
 }
 
-function buildAssistantMsg(text: string) {
-	return CHAT_DELIMETER + `${CHAT_AGENT_MARKER} ${text}` + CHAT_DELIMETER;
+function buildAssistantMsg(text: string, assistantName: string = 'ChatCBT') {
+	const agentMarker = `**${assistantName}:**`;
+	return CHAT_DELIMETER + `${agentMarker} ${text}` + CHAT_DELIMETER;
 }
 
 export { convertTextToMsg, buildAssistantMsg };
