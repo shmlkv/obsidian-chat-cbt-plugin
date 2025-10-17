@@ -1,21 +1,21 @@
 # ChatCBT
 
-An AI-powered journaling assistant for [Obsidian](https://obsidian.md/), inspired by cognitive behavioral therapy (CBT).
+An Obsidian plugin for Cognitive Behavioral Therapy journaling with AI assistance.
 
-**[Install](https://obsidian.md/plugins?search=chatcbt)**
+![Custom Prompts](docs/Screenshot%202025-10-16%20at%2023.58.15.png)
 
-<a href="https://www.buymeacoffee.com/clairefro"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a potato&emoji=🍠&slug=clairefro&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" /></a>
-
-## Demo
-
-ChatCBT is a journaling assistant that prods you to reframe negative thoughts and rewire your reactions to distressful situations ([\*disclaimer](https://github.com/clairefro/obsidian-chat-cbt-plugin#disclaimer)).
+![Menu with Custom Prompts](docs/Screenshot%202025-10-16%20at%2023.57.51.png)
 
 ## Features
 
-- Desktop or Mobile
-- Supports 60+ languages
-- Local or cloud AI models
-- Editable prompt
+- **Custom Prompts** - Create your own therapy prompts with names (appear in menu and as commands)
+- **Default Behavioral Therapy Prompts** - 4 pre-configured prompts: Exposure Ladder, Activity Plan, Habit Builder, Avoidance Check
+- **Customizable Assistant Name** - Choose how responses are labeled in your notes
+- **OpenRouter Integration** - Access 100+ AI models through one unified API
+- **60+ Languages** - Get responses in your preferred language
+- **Editable System Prompt** - Customize how the AI responds
+- **Desktop & Mobile** - Works everywhere Obsidian does
+- **Private & Secure** - Conversations stored locally on your device
 
 ### Start chatting in a note
 
@@ -25,147 +25,135 @@ ChatCBT is a journaling assistant that prods you to reframe negative thoughts an
 
 ![summary-gif](https://github.com/clairefro/obsidian-chat-cbt-plugin/assets/9841162/27130199-4398-4861-bef7-924bc9f979d2)
 
-## Features
+## What is ChatCBT?
 
-- Available any time of day or night
-- Get objective responses to help yourself uncover negative thinking patterns
-- See situations from other angles to help you move forward
-- Conversations are stored privately in local files on your computer
-- Summarize your reframed thoughts in a table to inspire affirmations
-- Choose how your data is handled: use either a cloud-based AI service (OpenAI/Deepseek), or a 100% local and private service (Ollama).
-- Less than a penny per journal session if using OpenAI or Deepseek, or FREE if using Ollama
-- Edit the system prompt to your liking (ex: "Speak to me as Carl Jung")
+ChatCBT is an AI-powered journaling assistant designed to help you:
 
-You can keep your local conversations and affirmations as a diary, or even share them with a therapist.
+- Uncover negative thinking patterns through objective questioning
+- See situations from different angles
+- Practice behavioral therapy techniques (exposure, activation, habit building)
+- Store conversations privately in local files
+- Summarize insights in organized tables
+- Use custom prompts for specific therapy techniques
+
+**Cost:** Pennies per session (depending on the model you choose via OpenRouter)
+
+You can keep your conversations as a personal diary or share insights with your therapist.
 
 ## Setup
 
-To get started using ChatCBT, you need to configure an AI platform connection from the ChatCBT plugin settings menu.
+ChatCBT uses [OpenRouter](https://openrouter.ai/) to access AI models. OpenRouter provides a unified API to access 100+ models from different providers (OpenAI, Anthropic, Google, Meta, and more).
 
-<img width="1090" alt="image" src="https://github.com/user-attachments/assets/ed3a5986-b508-4fab-8d8d-1368f6c742ec" />
+### Why OpenRouter?
 
-You have three options:
+- **Access to many models** - Choose from GPT-4, Claude, Gemini, Llama, and 100+ others
+- **One API key** - No need to manage multiple provider accounts
+- **Competitive pricing** - Often cheaper than going direct to providers
+- **Easy switching** - Try different models without changing your setup
 
-- **OpenAI** - a paid cloud service
-- **Deepseek** - a paid cloud service
-- **Ollama** - a free local service
+### Getting Started
 
-**OpenAI** is recommended for conversation quality and speed, with the cavaet that it is a paid service, and that your messages are sent to OpenAI. See [OpenAI's data privacy policy](https://openai.com/policies/privacy-policy).
+1. **Create an OpenRouter account**
+   - Go to [openrouter.ai](https://openrouter.ai/) and sign up
+   - Add credits to your account (starting with $5-10 is plenty)
 
-### Choosing a model
+2. **Get your API key**
+   - Navigate to [openrouter.ai/keys](https://openrouter.ai/keys)
+   - Create a new API key and copy it
 
-ChatCBT defaults to the following models for each platform mode. You can manually override the model in the ChatCBT settings. See available [OpenAI models](https://platform.openai.com/docs/models) (note that some are more costly than others) and [Ollama models](https://ollama.ai/library).
+3. **Configure ChatCBT**
+   - Open Obsidian Settings → ChatCBT
+   - Paste your OpenRouter API key
+   - Choose a model (default: `openai/gpt-4o-mini`)
 
-| Platform                 | Default model      | Cost         | Hosting         | Speed   | Quality   |
-| ------------------------ | ------------------ | ------------ | --------------- | ------- | --------- |
-| **OpenAI** (recommended) | `gpt-4o-mini`      | Paid (cheap) | Cloud           | Fast ⚡ | Excellent |
-| **Deepseek**             | `deepseek-chat`    | Paid (cheap) | Cloud           | Fast ⚡ | Excellent |
-| **Ollama**               | downloaded models | Free         | Local (private) | OK      | Great     |
+### Choosing a Model
 
-### OpenAI setup (Cloud)
+Browse available models at [openrouter.ai/models](https://openrouter.ai/models)
 
-[OpenAI](https://openai.com/about) is a cloud AI provider created by a U.S.-based AI research lab backed by Microsoft.
+**Recommended models:**
 
-While use of OpenAI costs money, it is cheap (as of June 2025). Chat sessions with ChatCBT cost less than a few cents.
+| Model | ID | Cost (approx) | Best for |
+|-------|-----|---------------|----------|
+| GPT-4o Mini | `openai/gpt-4o-mini` | $0.001/session | Fast, cheap, great quality (default) |
+| Claude 3.5 Sonnet | `anthropic/claude-3.5-sonnet` | $0.01/session | Best reasoning, empathy |
+| Gemini Flash | `google/gemini-flash-1.5` | $0.001/session | Fast, good quality |
+| Llama 3.1 70B | `meta-llama/llama-3.1-70b-instruct` | $0.003/session | Open source, solid performance |
 
-To use OpenAI with ChatCBT:
+Enter the model ID in ChatCBT settings. You can change models anytime.
 
-1. [Create](https://auth0.openai.com/u/signup) an OpenAI account
-2. Add a payment method to your account, and add a small credit (ex: $10 = roughly 500 ChatCBT sessions!)
-3. Generate an API Key [here](https://platform.openai.com/api-keys) and copy it to your clipboard
-4. Set your OpenAI API Key in ChatCBT plugin settings (visibile when OpenAI provider is selected)
-
-Treat your OpenAI API Keys like a password - do not share this publicly. For your safety, your OpenAI API key is encrypted when saving settings.
-
-_**Note:** With the OpenAI option enabled, your messages will be sent to OpenAI. See [OpenAI's data privacy policy](https://openai.com/policies/privacy-policy). To minimize chances of your messages being associated with you personally, I crafted the default prompt to respond to a "fictional client" such that it looks like you are creating fake scenarios. As you can guess, this is not foolproof. Try to stick to your emotions, and avoid disclosing any sensitive personal info like real names of people or your home address._
-
-If you prefer to use a different [OpenAI model](https://platform.openai.com/docs/models), you can specify in the plugin settings.
-
-### Deepseek setup (Cloud)
-
-[Deepseek](https://api-docs.deepseek.com/quick_start/pricing) is a cloud AI provider backed by a Chinese research team.
-
-While use of Deepseek costs money, it is cheap (as of June 2025). Chat sessions with ChatCBT cost less than a few cents.
-
-To use Deepseek with ChatCBT:
-
-1. [Create](https://platform.deepseek.com/sign_up) a Deepseek account
-2. Add a payment method to your account, and add a small credit of a couple dollars
-3. Generate an API Key [here](https://platform.deepseek.com/api_keys) and copy it to your clipboard
-4. Set your Deepseek API Key in ChatCBT plugin settings (visibile when Deepseek provider is selected)
-
-Treat your Deepseek API Keys like a password - do not share this publicly. For your safety, your Deepseek API key is encrypted when saving settings.
-
-_**Note:** With the Deepseek provider enabled, your messages will be sent to Deepseek. See [Deepseeks's data privacy policy](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html). To minimize chances of your messages being associated with you personally, I crafted the default prompt to respond to a "fictional client" such that it looks like you are creating fake scenarios. As you can guess, this is not foolproof. Try to stick to your emotions, and avoid disclosing any sensitive personal info like real names of people or your home address._
-
-As of June 2025, there are only two available Deepseek chat models: `deepseek-chat` (default, recommended) and `deepseek-reason`.
-
-### Ollama setup (Local and private)
-
-[Ollama](https://ollama.ai/) is a client that allows you to easily run powerful open source LLM models locally on your machine privately for free.
-
-Requires Ollama v0.1.24 or higher
-
-**System requirements**
-
-- Available for:
-  - MacOS Big Sur or later
-  - Linux
-  - Windows
-- 2.5GB of storage (depending on model you choose)
-  - Ollama: 500 MB
-  - llama2 model (recommended): ~2GB
-- At least 8GB of RAM, ideally
-
-1. [download ollama](https://ollama.ai/) (Get Ollama v0.1.24 or higher)
-2. download a [model](https://ollama.com/search) such as `llama2`: in terminal, run `ollama pull llama2`
-3. Start local server. In terminal, run `ollama serve`
-4. Ensure "Ollama" is selected as the AI provider in ChatCBT settings and you select a downloaded model
-
-_(Troubleshooting: if you have trouble getting Ollama to run with Obsidian, stop the Ollama server and try running wtih `OLLAMA_ORIGINS="*" OLLAMA_HOST="0.0.0.0:11434"`)_
-
-This will start a local server that hosts your Ollama instance locally on your computer from port `11434`. For advanced users, you can change the port or url if you like. Just be sure to update the Ollama url in the ChatCBT settings.
-
-If you prefer to use a different [Ollama model](https://ollama.ai/library), you can specify in the plugin settings.
+**Privacy Note:** Your messages are sent to the model provider via OpenRouter. Review [OpenRouter's privacy policy](https://openrouter.ai/privacy). Avoid sharing sensitive personal information.
 
 ## Usage
 
-1. Start a new note
-2. Type what's bothering you
-3. Run "Chat" from ChatCBT
-4. Chat with ChatGPT by adding your responses at the bottom of the file
-5. Keep chatting to start reframing your negative thoughts
-6. Once you are ready to sum up your conversation, run "Summarize" to create a table outlining your reframed thoughts
+### Basic Chat
 
-### Running commands
+1. Create a new note
+2. Write about what's bothering you
+3. Click the ChatCBT ribbon icon (❤️‍🩹) → select "Chat"
+4. Continue the conversation by adding your responses at the bottom
+5. The AI will respond as your configured assistant name
+6. When ready, use "Summarize" to create a summary table
 
-You can run the "Chat" and "Summarize" commands from the left ribbon menu or the command pallette.
+### Using Custom Prompts
+
+ChatCBT includes 4 default behavioral therapy prompts:
+
+- **Exposure Ladder** - Create an anxiety hierarchy with actionable steps
+- **Activity Plan** - Build a behavioral activation plan
+- **Habit Builder** - Design new habits using behavioral principles
+- **Avoidance Check** - Identify and address avoidance patterns
+
+Access them via:
+- **Ribbon menu** - Click the ChatCBT icon
+- **Command Palette** - `Cmd/Ctrl + P` → search for prompt name
+- **Slash commands** - Type `/` in your note (if enabled)
+
+### Creating Your Own Prompts
+
+1. Open Settings → ChatCBT → Custom Prompts
+2. Click "Add Prompt"
+3. Enter a name (appears in menu)
+4. Write your prompt text
+5. Reload the plugin to activate the new command
+
+Examples:
+- "Gratitude Practice" - List 3 things you're grateful for
+- "Thought Record" - Identify thought → emotion → evidence
+- "Values Check" - Examine if actions align with values
+
+### Running Commands
 
 **Ribbon menu**
 
 <img width="368" alt="image" src="https://github.com/clairefro/obsidian-chat-cbt-plugin/assets/9841162/1ab0126b-48de-48c4-b33d-45896334651c">
 
-**Command pallete (`cmd` + `p` > search "chat...")**
+**Command Palette (`cmd` + `p` > search "chat...")**
 
 <img width="777" alt="image" src="https://github.com/clairefro/obsidian-chat-cbt-plugin/assets/9841162/ea32ec43-dd9e-4def-87f2-64ee59b9f849">
 
-**Slash command**
+## Configuration
 
-Enable slash commands from the Obsidian Core Plugins, and you can type `/chat` or `/summarize` inline to access ChatCBT actions in your notes.
+### System Prompt
 
-## Edit Prompt
+Customize how the AI responds to you from Settings → ChatCBT → Edit System Prompt.
 
-You can update the system prompt (or restore it to the default) from Settings.
+You can restore the default prompt anytime using the "Reset to Default" button.
 
 <img width="1080" alt="image" src="https://github.com/user-attachments/assets/5f18f29f-dfbe-4002-9020-df7fac3dca0a" />
 
-_The response will honor the Preferred Language setting, regardless of the language of the prompt._
+### Assistant Name
 
-## Preferred Language (Beta)
+Change how responses are labeled in your notes (Settings → Assistant Name).
 
-Select the language you prefer ChatCBT to repsond in from the Settings. Raise an issue if you run into any quality concerns, or would like to request a language!
+Examples: "ChatCBT", "Claude", "Therapist", "Guide"
+
+### Preferred Language
+
+ChatCBT supports 60+ languages. Select your preference in Settings.
 
 <img width="1091" alt="image" src="https://github.com/user-attachments/assets/9a0022b6-93b9-4b94-82f3-0dd17e1005b0" />
+
+_Responses will honor your language setting regardless of the prompt language._
 
 ## Contributing
 

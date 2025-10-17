@@ -45,6 +45,29 @@ interface ChatCbtResponseInput {
 /** Constants */
 const DEFAULT_LANG = 'English';
 
+const DEFAULT_CUSTOM_PROMPTS: CustomPrompt[] = [
+	{
+		id: 'exposure-ladder',
+		name: 'Exposure Ladder',
+		prompt: 'Help me create an exposure hierarchy for this fear/anxiety. List situations from least to most anxiety-provoking (0-10 scale), with specific, actionable steps I can practice.',
+	},
+	{
+		id: 'behavioral-activation',
+		name: 'Activity Plan',
+		prompt: 'Help me create a behavioral activation plan. Suggest specific activities that align with my values and could improve my mood. Include small, achievable steps I can take today.',
+	},
+	{
+		id: 'habit-building',
+		name: 'Habit Builder',
+		prompt: 'Help me build this new habit using behavioral principles. Suggest: 1) A clear trigger/cue, 2) The specific behavior, 3) An immediate reward, 4) How to track progress.',
+	},
+	{
+		id: 'avoidance-check',
+		name: 'Avoidance Check',
+		prompt: 'Help me identify what I might be avoiding in this situation. What behaviors am I using to escape discomfort? What would facing this look like in small, manageable steps?',
+	},
+];
+
 const DEFAULT_SETTINGS: ChatCbtPluginSettings = {
 	openRouterApiKey: '',
 	mode: AI_PROVIDERS.OPENROUTER,
@@ -98,6 +121,29 @@ export default class ChatCbtPlugin extends Plugin {
 					}),
 			);
 
+			// Add custom prompts to menu
+			if (this.settings.customPrompts && this.settings.customPrompts.length > 0) {
+				menu.addSeparator();
+				this.settings.customPrompts.forEach((customPrompt) => {
+					menu.addItem((item) =>
+						item
+							.setTitle(customPrompt.name)
+							.setIcon('zap')
+							.onClick(async () => {
+								try {
+									await this.getChatCbtRepsonse({
+										isSummary: false,
+										mode: this.settings.mode,
+										customPrompt: customPrompt.prompt,
+									});
+								} catch (e) {
+									new Notice(e.message);
+								}
+							}),
+					);
+				});
+			}
+
 			menu.showAtMouseEvent(evt);
 		});
 
@@ -121,6 +167,21 @@ export default class ChatCbtPlugin extends Plugin {
 			},
 		});
 
+		// Add commands for custom prompts
+		this.settings.customPrompts.forEach((customPrompt) => {
+			this.addCommand({
+				id: `custom-prompt-${customPrompt.id}`,
+				name: customPrompt.name,
+				editorCallback: (_editor: Editor, _view: MarkdownView) => {
+					this.getChatCbtRepsonse({
+						isSummary: false,
+						mode: this.settings.mode as Mode,
+						customPrompt: customPrompt.prompt,
+					});
+				},
+			});
+		});
+
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new MySettingTab(this.app, this));
 	}
@@ -140,6 +201,12 @@ export default class ChatCbtPlugin extends Plugin {
 		// Force mode to OpenRouter
 		if (this.settings.mode !== AI_PROVIDERS.OPENROUTER) {
 			this.settings.mode = AI_PROVIDERS.OPENROUTER;
+			needsSave = true;
+		}
+
+		// Add default custom prompts if none exist
+		if (!this.settings.customPrompts || this.settings.customPrompts.length === 0) {
+			this.settings.customPrompts = [...DEFAULT_CUSTOM_PROMPTS];
 			needsSave = true;
 		}
 
@@ -378,6 +445,78 @@ class MySettingTab extends PluginSettingTab {
 		openRouterLinkboxEl.createEl('br');
 
 		containerEl.appendChild(openRouterLinkboxEl);
+
+		// CUSTOM PROMPTS SECTION
+		containerEl.createEl('h3', { text: 'Custom Prompts' });
+		containerEl.createEl('p', {
+			text: 'Create custom prompts with names. They will appear in the menu and as commands.',
+			cls: 'setting-item-description'
+		});
+
+		// Add new prompt button
+		new Setting(containerEl)
+			.setName('Add Custom Prompt')
+			.setDesc('Create a new custom prompt')
+			.addButton((button) =>
+				button
+					.setButtonText('Add Prompt')
+					.setCta()
+					.onClick(async () => {
+						const newPrompt: CustomPrompt = {
+							id: Date.now().toString(),
+							name: 'New Prompt',
+							prompt: 'Enter your prompt here',
+						};
+						this.plugin.settings.customPrompts.push(newPrompt);
+						await this.plugin.saveSettings();
+						this.display(); // Refresh the settings view
+						new Notice('Please reload the plugin for the new command to appear');
+					}),
+			);
+
+		// Display existing custom prompts
+		this.plugin.settings.customPrompts.forEach((customPrompt, index) => {
+			// Prompt name and delete button
+			new Setting(containerEl)
+				.setName(`Prompt #${index + 1}`)
+				.setDesc('Name')
+				.addText((text) =>
+					text
+						.setPlaceholder('Prompt Name')
+						.setValue(customPrompt.name)
+						.onChange(async (value) => {
+							customPrompt.name = value || 'Unnamed Prompt';
+							await this.plugin.saveSettings();
+						}),
+				)
+				.addButton((button) =>
+					button
+						.setButtonText('Delete')
+						.setWarning()
+						.onClick(async () => {
+							this.plugin.settings.customPrompts.splice(index, 1);
+							await this.plugin.saveSettings();
+							this.display();
+							new Notice('Please reload the plugin for changes to take effect');
+						}),
+				);
+
+			// Prompt textarea
+			new Setting(containerEl)
+				.setName('')
+				.setDesc('Prompt text')
+				.addTextArea((text) => {
+					text
+						.setPlaceholder('Enter the prompt text...')
+						.setValue(customPrompt.prompt)
+						.onChange(async (value) => {
+							customPrompt.prompt = value;
+							await this.plugin.saveSettings();
+						});
+					text.inputEl.rows = 3;
+					text.inputEl.style.width = '100%';
+				});
+		});
 
 		// LANGUAGE
 		new Setting(containerEl)
